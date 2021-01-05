@@ -1,4 +1,4 @@
-# PyTorch implementation of FactorGCN
+# PyTorch implementation of DistillGCN
 
 Paper: [Distilling Knowledge From Graph Convolutional Networks](https://openaccess.thecvf.com/content_CVPR_2020/html/Yang_Distilling_Knowledge_From_Graph_Convolutional_Networks_CVPR_2020_paper.html), CVPR'20
 
@@ -14,7 +14,7 @@ Paper: [Distilling Knowledge From Graph Convolutional Networks](https://openacce
 
 > DGL = 1.4.0
 
-See [requirment](requirment.txt) file for more information
+See [requirment](requirments.txt) file for more information
 about how to install the dependencies.
 
 ## Training and evaluation
