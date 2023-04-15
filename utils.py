@@ -144,6 +144,7 @@ def get_student(args, data_info):
 
 def get_feat_info(args):
     feat_info = {}
+    # list multpilication [3] * 3 == [3,3,3]
     feat_info['s_feat'] = [args.s_num_heads*args.s_num_hidden] * args.s_num_layers
     feat_info['t_feat'] = [args.t_num_heads*args.t_num_hidden] * args.t_num_layers
     #assert len(feat_info['s_feat']) == len(feat_info['t_feat']),"number of hidden layer for teacher and student are not equal"
