@@ -1,4 +1,4 @@
-name: dlexp3
+name: dlf
 channels:
   - defaults
 dependencies:
@@ -52,6 +52,7 @@ dependencies:
       - cffi==1.12.3
       - cycler==0.10.0
       - decorator==4.4.0
+      - dgl-cu100==0.4
       - joblib==0.14.0
       - kiwisolver==1.1.0
       - matplotlib==3.1.1
