@@ -65,10 +65,17 @@ def old_get_local_model(feat_info, upsampling=False):
         return customized_GAT(feat_info['s_feat'][1], feat_info['t_feat'][1], retatt=True)
     return customized_GAT(feat_info['t_feat'][1], feat_info['t_feat'][1], retatt=True)
 
-def get_local_model(feat_info, upsampling=False):
-    ''' 
-    '''
-    return distanceNet()
+
+def get_graph_local_structure(graph, feats):
+        with graph.local_scope():
+            feats = feats.view(-1, 1, feats.shape[1])
+            graph.ndata.update({'ftl': feats, 'ftr': feats})
+            graph.apply_edges(fn.u_sub_v('ftl', 'ftr', 'diff'))
+            e = graph.edata.pop('diff')
+            e = torch.exp( (-1.0/100) * torch.sum(torch.abs(e), dim=-1) )
+            e = edge_softmax(graph, e)
+        return e
+
 
 def get_upsampling_model(feat_info):
     '''upsampling the features of a graph

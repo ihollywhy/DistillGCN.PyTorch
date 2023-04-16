@@ -7,6 +7,7 @@ from plot_utils import statistics_feature
 from dgl.nn.pytorch.softmax import edge_softmax
 import dgl
 import dgl.function as fn
+from local_structure import get_graph_local_structure
 
 
 statistics_plot = statistics_feature()
@@ -69,8 +70,8 @@ def gen_mi_loss(auxiliary_model, middle_feats_s, subgraph, feats, device, class_
         _, middle_feats_t = t_model(feats.float(), middle=True)
         middle_feats_t = middle_feats_t[1]
     
-    dist_t = auxiliary_model['local_model']['model'](subgraph, middle_feats_t)
-    dist_s = auxiliary_model['local_model']['model'](subgraph, middle_feats_s)
+    dist_t = get_graph_local_structure(subgraph, middle_feats_t)
+    dist_s = get_graph_local_structure(subgraph, middle_feats_s)
     graphKL_loss = graph_KLDiv(subgraph, dist_s, dist_t)
     return graphKL_loss
 
@@ -98,7 +99,7 @@ def gen_att_loss(auxiliary_model, middle_feats_s, subgraph, feats, device):
     
     return loss_fcn(middle_feats_s, middle_feats_t)
 
-
+## problem
 def gen_fit_loss(auxiliary_model, middle_feats_s, subgraph, feats, device):
     """
     generate the loss according to a similar stratagy shown in fitnets paper

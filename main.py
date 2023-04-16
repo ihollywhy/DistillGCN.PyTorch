@@ -90,7 +90,6 @@ def train_student(args, auxiliary_model, data, device):
             elif args.mode == 'mi':
                 if epoch>args.warmup_epoch:
                     if not has_run:
-                        #block_optimizer(args, auxiliary_model, "s_model", [args.lr*0.1,args.lr*0.2,args.lr*0.5,args.lr, args.lr])
                         has_run = True
                     args.loss_weight = 0
                     mi_loss = ( torch.tensor(0).to(device) if args.loss_weight==0 else
@@ -104,7 +103,6 @@ def train_student(args, auxiliary_model, data, device):
             
             loss = ce_loss + additional_loss
 
-            #optimizing(auxiliary_model, loss, ['s_model', 'local_model', 'local_model_s'])
             optimizing(auxiliary_model, loss, ['s_model'])
             loss_list.append(loss.item())
             additional_loss_list.append(additional_loss.item() if additional_loss!=0 else 0)
