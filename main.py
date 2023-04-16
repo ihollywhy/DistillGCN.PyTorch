@@ -37,7 +37,7 @@ def train_student(args, auxiliary_model, data, device):
     best_score = 0
     best_loss = 1000.0
 
-    train_dataloader, valid_dataloader, test_dataloader, fixed_train_dataloader = data
+    train_dataloader, valid_dataloader, test_dataloader = data
     
     # multi class loss function
     loss_fcn = torch.nn.BCEWithLogitsLoss()
@@ -54,16 +54,13 @@ def train_student(args, auxiliary_model, data, device):
         loss_list = []
         additional_loss_list = []
         t0 = time.time()
-        for batch, batch_data in enumerate( zip(train_dataloader,fixed_train_dataloader) ):
+        for batch, batch_data in enumerate(train_dataloader):
             step_n += 1
-            shuffle_data, fixed_data = batch_data
-            subgraph, feats, labels = shuffle_data
-            fixed_subgraph, fixed_feats, fixed_labels = fixed_data
+            subgraph, feats, labels = batch_data
 
             feats = feats.to(device)
             labels = labels.to(device)
-            fixed_feats = fixed_feats.to(device)
-            fixed_labels = fixed_labels.to(device)
+
 
             s_model.g = subgraph
             for layer in s_model.gat_layers:
@@ -97,14 +94,12 @@ def train_student(args, auxiliary_model, data, device):
                         has_run = True
                     args.loss_weight = 0
                     mi_loss = ( torch.tensor(0).to(device) if args.loss_weight==0 else
-                                gen_mi_loss(auxiliary_model, middle_feats_s[args.target_layer], subgraph, feats, 
-                                            fixed_subgraph, fixed_feats, device, class_loss_detach) )
+                                gen_mi_loss(auxiliary_model, middle_feats_s[args.target_layer], subgraph, feats, device, class_loss_detach) )
                     
                     additional_loss = mi_loss * args.loss_weight
                 else:
                     #ce_loss *= 0
-                    mi_loss = gen_mi_loss(auxiliary_model, middle_feats_s[args.target_layer], subgraph, feats, 
-                                            fixed_subgraph, fixed_feats, device, class_loss_detach)
+                    mi_loss = gen_mi_loss(auxiliary_model, middle_feats_s[args.target_layer], subgraph, feats, device, class_loss_detach)
                     additional_loss = mi_loss * args.loss_weight
             
             loss = ce_loss + additional_loss
@@ -127,7 +122,7 @@ def train_student(args, auxiliary_model, data, device):
 
 
 def train_teacher(args, model, data, device):
-    train_dataloader, valid_dataloader, test_dataloader, _ = data
+    train_dataloader, valid_dataloader, test_dataloader = data
     
     best_model = None
     best_val = 0
@@ -212,7 +207,7 @@ def main(args):
 
     # verify the teacher model
     loss_fcn = torch.nn.BCEWithLogitsLoss()
-    train_dataloader, _, test_dataloader, _ = data
+    train_dataloader, _, test_dataloader = data
     print(f"test acc of teacher:")
     test_model(test_dataloader, t_model, device, loss_fcn)
     print(f"train acc of teacher:")
