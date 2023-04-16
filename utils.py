@@ -14,10 +14,7 @@ from gat import GAT, GCN
 def evaluate(feats, model, subgraph, labels, loss_fcn):
     model.eval()
     with torch.no_grad():
-        model.g = subgraph
-        for layer in model.gat_layers:
-            layer.g = subgraph
-        output = model(feats.float())
+        output = model(subgraph, feats.float())
         loss_data = loss_fcn(output, labels.float())
         predict = np.where(output.data.cpu().numpy() >= 0.5, 1, 0)
         score = f1_score(labels.data.cpu().numpy(),
@@ -47,11 +44,8 @@ def generate_label(t_model, subgraph, feats, device):
     # t_model.to(device)
     t_model.eval()
     with torch.no_grad():
-        t_model.g = subgraph
-        for layer in t_model.gat_layers:
-            layer.g = subgraph
         # soft labels
-        logits_t = t_model(feats.float())
+        logits_t = t_model(subgraph, feats.float())
         #pseudo_labels = torch.where(t_logits>0.5, 
         #                            torch.ones(t_logits.shape).to(device), 
         #                            torch.zeros(t_logits.shape).to(device))
@@ -111,8 +105,7 @@ def get_teacher(args, data_info):
     data_info holds some special arugments
     '''
     heads = ([args.t_num_heads] * args.t_num_layers) + [args.t_num_out_heads]
-    model = GAT(data_info['g'],
-            args.t_num_layers,
+    model = GAT(args.t_num_layers,
             data_info['num_feats'],
             args.t_num_hidden,
             data_info['n_classes'],
@@ -129,8 +122,7 @@ def get_student(args, data_info):
     data_info holds some special arugments
     '''
     heads = ([args.s_num_heads] * args.s_num_layers) + [args.s_num_out_heads]
-    model = GAT(data_info['g'],
-            args.s_num_layers,
+    model = GAT(args.s_num_layers,
             data_info['num_feats'],
             args.s_num_hidden,
             data_info['n_classes'],

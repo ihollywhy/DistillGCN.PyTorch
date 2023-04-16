@@ -62,11 +62,8 @@ def train_student(args, auxiliary_model, data, device):
             labels = labels.to(device)
 
 
-            s_model.g = subgraph
-            for layer in s_model.gat_layers:
-                layer.g = subgraph
             
-            logits, middle_feats_s = s_model(feats.float(), middle=True)
+            logits, middle_feats_s = s_model(subgraph, feats.float(), middle=True)
             
             if epoch >= args.tofull:
                 args.mode = 'full'
@@ -137,14 +134,13 @@ def train_teacher(args, model, data, device):
             subgraph, feats, labels = batch_data
             feats = feats.to(device)
             labels = labels.to(device)
-            model.g = subgraph
-            for layer in model.gat_layers:
-                layer.g = subgraph
-            logits = model(feats.float())
+            logits = model(subgraph, feats.float())
             loss = loss_fcn(logits, labels.float())
+            
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            
             loss_list.append(loss.item())
         loss_data = np.array(loss_list).mean()
         print(f"Epoch {epoch + 1:05d} | Loss: {loss_data:.4f}")

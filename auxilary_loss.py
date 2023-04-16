@@ -64,10 +64,7 @@ def gen_mi_loss(auxiliary_model, middle_feats_s, subgraph, feats, device, class_
     t_model = auxiliary_model['t_model']['model']
     
     with torch.no_grad():
-        t_model.g = subgraph
-        for layer in t_model.gat_layers:
-            layer.g = subgraph
-        _, middle_feats_t = t_model(feats.float(), middle=True)
+        _, middle_feats_t = t_model(subgraph, feats.float(), middle=True)
         middle_feats_t = middle_feats_t[1]
     
     dist_t = get_graph_local_structure(subgraph, middle_feats_t)
@@ -85,10 +82,7 @@ def gen_att_loss(auxiliary_model, middle_feats_s, subgraph, feats, device):
     t_model = auxiliary_model['t_model']['model']
     
     with torch.no_grad():
-        t_model.g = subgraph
-        for layer in t_model.gat_layers:
-            layer.g = subgraph
-        _, middle_feats_t = t_model(feats.float(), middle=True)
+        _, middle_feats_t = t_model(subgraph, feats.float(), middle=True)
         middle_feats_t = middle_feats_t[1].detach()
     
     middle_feats_t = torch.abs(middle_feats_t)
@@ -111,10 +105,7 @@ def gen_fit_loss(auxiliary_model, middle_feats_s, subgraph, feats, device):
     t_model = auxiliary_model['t_model']['model']
     
     with torch.no_grad():
-        t_model.g = subgraph
-        for layer in t_model.gat_layers:
-            layer.g = subgraph
-        _, middle_feats_t = t_model(feats.float(), middle=True)
+        _, middle_feats_t = t_model(subgraph, feats.float(), middle=True)
         middle_feats_t = middle_feats_t[1].detach()
     
     return loss_fcn(upsampled_feats_s, middle_feats_t)
