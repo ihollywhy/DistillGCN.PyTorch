@@ -11,31 +11,49 @@ from dgl.data.ppi import LegacyPPIDataset as PPIDataset
 from gat import GAT, GCN
 
 
-def evaluate(feats, model, subgraph, labels, loss_fcn):
-    model.eval()
-    with torch.no_grad():
-        output = model(subgraph, feats.float())
-        loss_data = loss_fcn(output, labels.float())
-        predict = np.where(output.data.cpu().numpy() >= 0.5, 1, 0)
-        score = f1_score(labels.data.cpu().numpy(),
-                         predict, average='micro')
+def train_epoch(train_dataloader, model, loss_fcn, optimizer, device):
     model.train()
-    
-    return score, loss_data.item()
+    loss_list = []
+    for batch, batch_data in enumerate(train_dataloader):
+        # getting the data
+        subgraph, feats, labels = batch_data
+        feats, labels = feats.to(device), labels.to(device)
 
-def test_model(test_dataloader, model, device, loss_fcn):
-    test_score_list = []
+        # forward pass
+        logits = model(subgraph, feats.float())
+        loss = loss_fcn(logits, labels.float())
+        
+        # backpropagation
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        loss_list.append(loss.item())
+    return np.array(loss_list).mean()
+
+
+def evaluate(dataloader, model, loss_func, device):
     model.eval()
-    with torch.no_grad():
-        for batch, test_data in enumerate(test_dataloader):
-            subgraph, feats, labels = test_data
-            feats = feats.to(device)
-            labels = labels.to(device)
-            test_score_list.append(evaluate(feats, model, subgraph, labels.float(), loss_fcn)[0])
-        mean_score = np.array(test_score_list).mean()
-        print(f"F1-Score on testset:        {mean_score:.4f}")
-    model.train()
-    return mean_score
+    score_list = []
+    val_loss_list = []
+    for batch, graph_data in enumerate(dataloader):
+        # getting data
+        subgraph, feats, labels = graph_data
+        feats, labels = feats.to(device), labels.to(device)
+        
+        # forward
+        with torch.no_grad():
+            output = model(subgraph, feats.float())
+            val_loss = loss_func(output, labels.float())
+            predict = np.where(output.data.cpu().numpy() >= 0.5, 1, 0)
+            score = f1_score(labels.data.cpu().numpy(), predict, average='micro')
+
+        # storing stats
+        score_list.append(score)
+        val_loss_list.append(val_loss.item())
+    mean_score = np.array(score_list).mean()
+    mean_val_loss = np.array(val_loss_list).mean()
+    return mean_score, mean_val_loss
 
 
 def generate_label(t_model, subgraph, feats, device):
@@ -52,34 +70,6 @@ def generate_label(t_model, subgraph, feats, device):
         #labels = logits_t
     return logits_t.detach()
     
-
-def evaluate_model(valid_dataloader, train_dataloader, device, s_model, loss_fcn):
-    score_list = []
-    val_loss_list = []
-    s_model.eval()
-    with torch.no_grad():
-        for batch, valid_data in enumerate(valid_dataloader):
-            subgraph, feats, labels = valid_data
-            feats = feats.to(device)
-            labels = labels.to(device)
-            score, val_loss = evaluate(feats.float(), s_model, subgraph, labels.float(), loss_fcn)
-            score_list.append(score)
-            val_loss_list.append(val_loss)
-    mean_score = np.array(score_list).mean()
-    mean_val_loss = np.array(val_loss_list).mean()
-    print(f"F1-Score on valset  :        {mean_score:.4f} ")
-    s_model.train()
-    return mean_score
-
-    """
-    train_score_list = []
-    for batch, train_data in enumerate(train_dataloader):
-        subgraph, feats, labels = train_data
-        feats = feats.to(device)
-        labels = labels.to(device)
-        train_score_list.append(evaluate(feats, s_model, subgraph, labels.float(), loss_fcn)[0])
-    print(f"F1-Score on trainset:        {np.array(train_score_list).mean():.4f}")
-    """
 
 def collate(sample):
     graphs, feats, labels =map(list, zip(*sample))

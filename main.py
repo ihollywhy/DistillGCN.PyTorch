@@ -7,9 +7,9 @@ import torch.nn.functional as F
 import dgl
 import argparse
 from gat import GAT
-from utils import evaluate, collate
+from utils import evaluate, collate, train_epoch
 from utils import get_data_loader, save_checkpoint, load_checkpoint
-from utils import evaluate_model, test_model, generate_label
+from utils import generate_label
 from auxilary_loss import gen_fit_loss, optimizing, gen_mi_loss, loss_fn_kd, gen_att_loss
 from auxilary_model import collect_model
 from auxilary_optimizer import block_optimizer
@@ -18,6 +18,7 @@ import time
 import matplotlib.pyplot as plt
 import collections
 import random
+from tqdm import tqdm
 
 torch.set_num_threads(1)
 
@@ -108,76 +109,51 @@ def train_student(args, auxiliary_model, data, device):
         additional_loss_data = np.array(additional_loss_list).mean()
         print(f"Epoch {epoch:05d} | Loss: {loss_data:.4f} | Mi: {additional_loss_data:.4f} | Time: {time.time()-t0:.4f}s")
         if epoch % 10 == 0:
-            score = evaluate_model(valid_dataloader, train_dataloader, device, s_model, loss_fcn)
+            score, _ = evaluate(valid_dataloader, s_model, loss_fcn, device)
             if score > best_score or loss_data < best_loss:
                 best_score = score
                 best_loss = loss_data
-                test_score = test_model(test_dataloader, s_model, device, loss_fcn)
+                test_score, _ = evaluate(test_dataloader, s_model, loss_fcn, device)
     print(f"f1 score on testset: {test_score:.4f}")
 
 
 def train_teacher(args, model, data, device):
     train_dataloader, valid_dataloader, test_dataloader = data
-    
-    best_model = None
-    best_val = 0
-    # define loss function
-    loss_fcn = torch.nn.BCEWithLogitsLoss()
-    
-    # define the optimizer
+    loss_fcn = torch.nn.BCEWithLogitsLoss()    
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    
-    for epoch in range(args.t_epochs):
-        model.train()
-        loss_list = []
-        for batch, batch_data in enumerate(train_dataloader):
-            subgraph, feats, labels = batch_data
-            feats = feats.to(device)
-            labels = labels.to(device)
-            logits = model(subgraph, feats.float())
-            loss = loss_fcn(logits, labels.float())
-            
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            
-            loss_list.append(loss.item())
-        loss_data = np.array(loss_list).mean()
-        print(f"Epoch {epoch + 1:05d} | Loss: {loss_data:.4f}")
+
+    for epoch in tqdm(range(args.t_epochs)):
+        loss_data = train_epoch(train_dataloader, model, loss_fcn, optimizer, device)
         if epoch % 10 == 0:
-            score_list = []
-            val_loss_list = []
-            for batch, valid_data in enumerate(valid_dataloader):
-                subgraph, feats, labels = valid_data
-                feats = feats.to(device)
-                labels = labels.to(device)
-                score, val_loss = evaluate(feats.float(), model, subgraph, labels.float(), loss_fcn)
-                score_list.append(score)
-                val_loss_list.append(val_loss)
-            mean_score = np.array(score_list).mean()
-            mean_val_loss = np.array(val_loss_list).mean()
-            print(f"F1-Score on valset  :        {mean_score:.4f} ")
-            if mean_score > best_val:
-                best_model = copy.deepcopy(model)
+            val_score, val_loss = evaluate(valid_dataloader, model, loss_fcn, device)
+            train_score, train_loss = evaluate(train_dataloader, model, loss_fcn, device)
 
-            train_score_list = []
-            for batch, train_data in enumerate(train_dataloader):
-                subgraph, feats, labels = train_data
-                feats = feats.to(device)
-                labels = labels.to(device)
-                train_score_list.append(evaluate(feats, model, subgraph, labels.float(), loss_fcn)[0])
-            print(f"F1-Score on trainset:        {np.array(train_score_list).mean():.4f}")
-
-    # model = best_model
-
-    test_score_list = []
-    for batch, test_data in enumerate(test_dataloader):
-        subgraph, feats, labels = test_data
-        feats = feats.to(device)
-        labels = labels.to(device)
-        test_score_list.append(evaluate(feats, model, subgraph, labels.float(), loss_fcn)[0])
-    print(f"F1-Score on testset:        {np.array(test_score_list).mean():.4f}")
+    score, loss = evaluate(test_dataloader, model, loss_fcn, device)
+    print(f"F1-Score on testset:  {score:.4f}")
     
+
+def load_teacher_and_stats(model_dict, args, data, device):
+    t_model = model_dict['t_model']['model']
+
+    # load or train the teacher
+    if os.path.isfile("./models/t_model.pt"):
+        load_checkpoint(t_model, "./models/t_model.pt", device)
+    else:
+        train_teacher(args, t_model, data, device)
+        save_checkpoint(t_model, "./models/t_model.pt")
+    
+    print(f"number of parameter for teacher model: {parameters(t_model)}")
+    print(f"number of parameter for student model: {parameters(model_dict['s_model']['model'])}")
+
+    # verify the teacher model
+    loss_fcn = torch.nn.BCEWithLogitsLoss()
+    train_dataloader, _, test_dataloader = data
+    test_score, _ = evaluate(test_dataloader, t_model, loss_fcn, device)
+    train_score, _ = evaluate(train_dataloader, t_model, loss_fcn, device)
+    print(f"test acc of teacher:", test_score)
+    print(f"train acc of teacher:", train_score)
+    print("\n\n")
+    return
 
 
 def main(args):
@@ -185,28 +161,8 @@ def main(args):
     data, data_info = get_data_loader(args)
     model_dict = collect_model(args, data_info)
 
-    t_model = model_dict['t_model']['model']
-
-    # load or train the teacher
-    if os.path.isfile("./models/t_model.pt"):
-        load_checkpoint(t_model, "./models/t_model.pt", device)
-    else:
-        print("############ train teacher #############")
-        train_teacher(args, t_model, data, device)
-        save_checkpoint(t_model, "./models/t_model.pt")
-    
-
-    print(f"number of parameter for teacher model: {parameters(t_model)}")
-    print(f"number of parameter for student model: {parameters(model_dict['s_model']['model'])}")
-
-    # verify the teacher model
-    loss_fcn = torch.nn.BCEWithLogitsLoss()
-    train_dataloader, _, test_dataloader = data
-    print(f"test acc of teacher:")
-    test_model(test_dataloader, t_model, device, loss_fcn)
-    print(f"train acc of teacher:")
-    test_model(train_dataloader, t_model, device, loss_fcn)
-    
+    print("\n\n############ load/ train teacher and stats #############")
+    load_teacher_and_stats(model_dict, args, data, device)
 
     print("############ train student with teacher #############")
     train_student(args, model_dict, data, device)
