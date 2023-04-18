@@ -53,7 +53,7 @@ def loss_fn_kd(logits, logits_t, alpha=1.0, T=10.0):
     #mse_loss = mse_loss_fn(logits, logits_t)
     return ce_loss*alpha + (1-alpha)*kl_loss
 
-def gen_mi_loss(auxiliary_model, middle_feats_s, subgraph, feats, device, class_loss):
+def gen_mi_loss(t_model, middle_feats_s, subgraph, feats):
     """
     Params:
         middle_feats_s  -   student's middle features
@@ -61,8 +61,6 @@ def gen_mi_loss(auxiliary_model, middle_feats_s, subgraph, feats, device, class_
         feats  -  the input features
         device - pytorch device
     """
-    t_model = auxiliary_model['t_model']['model']
-    
     with torch.no_grad():
         _, middle_feats_t = t_model(subgraph, feats.float(), middle=True)
         middle_feats_t = middle_feats_t[1]

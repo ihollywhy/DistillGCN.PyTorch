@@ -9,6 +9,38 @@ from sklearn.metrics import f1_score
 import dgl
 from dgl.data.ppi import LegacyPPIDataset as PPIDataset
 from gat import GAT, GCN
+from auxilary_loss import gen_mi_loss
+
+
+class FullLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.regular_loss = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight):
+        loss = self.regular_loss(logits, labels)
+        return loss
+
+class TeacherLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.regular_loss = torch.nn.BCEWithLogitsLoss()
+
+    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight):
+        loss = self.regular_loss(logits, labels)
+        return loss
+
+class MILoss(nn.Module):
+    def __init__(self, model_t):
+        super().__init__()
+        self.regular_loss = torch.nn.BCEWithLogitsLoss()
+        self.model_t = model_t
+
+    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight):
+        reg_loss = self.regular_loss(logits, labels)
+        logits_t = self.model_t(graph, inputs)
+        lsp_loss = gen_mi_loss(self.model_t, middle_feats_s[target], graph, inputs)
+        return reg_loss + loss_weight * lsp_loss
 
 
 def train_epoch(train_dataloader, model, loss_fcn, optimizer, device):
@@ -54,6 +86,27 @@ def evaluate(dataloader, model, loss_func, device):
     mean_score = np.array(score_list).mean()
     mean_val_loss = np.array(val_loss_list).mean()
     return mean_score, mean_val_loss
+
+
+def train_epoch_s(train_dataloader, model, loss_fcn, optimizer, device, args):
+    model.train()
+    loss_list = []
+    for batch, batch_data in enumerate(train_dataloader):
+        # getting the data
+        subgraph, feats, labels = batch_data
+        feats, labels = feats.to(device), labels.to(device)
+
+        # forward pass
+        logits, middle_feats_s = model(subgraph, feats.float(), middle=True)
+        loss = loss_fcn(logits, labels.float(), feats, subgraph, middle_feats_s, args.target_layer, args.loss_weight)
+        
+        # backpropagation
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        
+        loss_list.append(loss.item())
+    return np.array(loss_list).mean()
 
 
 def generate_label(t_model, subgraph, feats, device):

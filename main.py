@@ -91,12 +91,12 @@ def train_student(args, auxiliary_model, data, device):
                         has_run = True
                     args.loss_weight = 0
                     mi_loss = ( torch.tensor(0).to(device) if args.loss_weight==0 else
-                                gen_mi_loss(auxiliary_model, middle_feats_s[args.target_layer], subgraph, feats, device, class_loss_detach) )
+                                gen_mi_loss(auxiliary_model["t_model"]['model'], middle_feats_s[args.target_layer], subgraph, feats))
                     
                     additional_loss = mi_loss * args.loss_weight
                 else:
                     #ce_loss *= 0
-                    mi_loss = gen_mi_loss(auxiliary_model, middle_feats_s[args.target_layer], subgraph, feats, device, class_loss_detach)
+                    mi_loss = gen_mi_loss(auxiliary_model['t_model']['model'], middle_feats_s[args.target_layer], subgraph, feats)
                     additional_loss = mi_loss * args.loss_weight
             
             loss = ce_loss + additional_loss
