@@ -17,30 +17,30 @@ class FullLoss(nn.Module):
         super().__init__()
         self.regular_loss = torch.nn.BCEWithLogitsLoss()
 
-    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight):
+    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight, t_model):
         loss = self.regular_loss(logits, labels)
-        return loss
+        return loss, torch.tensor([0])
+
 
 class TeacherLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.regular_loss = torch.nn.BCEWithLogitsLoss()
 
-    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight):
+    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight, t_model):
         loss = self.regular_loss(logits, labels)
-        return loss
+        return loss, torch.tensor([0])
 
 class MILoss(nn.Module):
-    def __init__(self, model_t):
+    def __init__(self):
         super().__init__()
         self.regular_loss = torch.nn.BCEWithLogitsLoss()
-        self.model_t = model_t
 
-    def forward(self, logits, labels, inputs, graph, middle_feats_s, target, loss_weight):
+    def forward(self, logits, labels, graph, inputs, middle_feats_s, target, loss_weight, t_model):
         reg_loss = self.regular_loss(logits, labels)
-        logits_t = self.model_t(graph, inputs)
-        lsp_loss = gen_mi_loss(self.model_t, middle_feats_s[target], graph, inputs)
-        return reg_loss + loss_weight * lsp_loss
+        #logits_t = t_model(graph, inputs)
+        lsp_loss = gen_mi_loss(t_model, middle_feats_s[target], graph, inputs)
+        return reg_loss + loss_weight * lsp_loss, lsp_loss
 
 
 def train_epoch(train_dataloader, model, loss_fcn, optimizer, device):
@@ -88,9 +88,10 @@ def evaluate(dataloader, model, loss_func, device):
     return mean_score, mean_val_loss
 
 
-def train_epoch_s(train_dataloader, model, loss_fcn, optimizer, device, args):
+def train_epoch_s(train_dataloader, model, model_t,loss_fcn, optimizer, device, args):
     model.train()
     loss_list = []
+    lsp_loss_list = []
     for batch, batch_data in enumerate(train_dataloader):
         # getting the data
         subgraph, feats, labels = batch_data
@@ -98,7 +99,7 @@ def train_epoch_s(train_dataloader, model, loss_fcn, optimizer, device, args):
 
         # forward pass
         logits, middle_feats_s = model(subgraph, feats.float(), middle=True)
-        loss = loss_fcn(logits, labels.float(), feats, subgraph, middle_feats_s, args.target_layer, args.loss_weight)
+        loss, lsp_loss = loss_fcn(logits, labels.float(), subgraph, feats.float(), middle_feats_s, args.target_layer, args.loss_weight, model_t)
         
         # backpropagation
         optimizer.zero_grad()
@@ -106,7 +107,8 @@ def train_epoch_s(train_dataloader, model, loss_fcn, optimizer, device, args):
         optimizer.step()
         
         loss_list.append(loss.item())
-    return np.array(loss_list).mean()
+        lsp_loss_list.append(lsp_loss.item())
+    return np.array(loss_list).mean(), np.array(lsp_loss_list).mean()
 
 
 def generate_label(t_model, subgraph, feats, device):
